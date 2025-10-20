@@ -7,8 +7,9 @@ Opinionated REST API for managing personal tasks with JWT-based authentication, 
 - PostgreSQL 15
 - JWT (HS256) + bcrypt password hashing
 - Jest + Supertest integration tests (backed by `pg-mem`)
+- Vanilla JS + TailwindCSS web client (served statically)
 - Docker/Docker Compose
-- GitHub Actions CI/CD
+- GitHub Actions CI
 
 ## Domain Model
 | Table | Fields |
@@ -54,11 +55,19 @@ All protected endpoints expect `Authorization: Bearer <JWT>` with 1-hour expiry 
    - `npm test` – Jest + Supertest suite (uses in-memory Postgres via `pg-mem`)
    - `npm run build` / `npm start`
 4. Dockerized stack: `docker compose up --build`
-   - Exposes API on `http://localhost:3000`
+   - Exposes API & web client on `http://localhost:3000`
    - PostgreSQL available on `localhost:5432` with credentials from `docker-compose.yml`
    - Mounts SQL migrations into the database container for automatic bootstrapping
+5. Visit `http://localhost:3000/` to use the Tailwind-powered dashboard (register/login, create tasks, update status, delete).
 
-## CI/CD Pipeline
+## Web Client
+The `public/` directory contains a zero-build, vanilla JS + Tailwind interface served by Express:
+- Register/login forms issue JWTs and persist the access token in local storage.
+- Authenticated workspace shows the current user, provides task creation with optional descriptions/due dates, and renders all tasks with status badges.
+- Inline actions let you update task status or delete records; the refresh button re-syncs with the API.
+- Toast notifications surface errors/success states for quick feedback.
+
+## CI Pipeline
 Defined in `.github/workflows/ci-cd.yml`.
 
 ### Pull Requests
@@ -70,28 +79,8 @@ Defined in `.github/workflows/ci-cd.yml`.
 6. Uploads built `dist/` as artifact for quick inspection
 
 ### Main Branch
-In addition to the steps above:
-1. Build & push Docker image with tags:
-   - `${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}`
-   - `${REGISTRY}/${IMAGE_NAME}:latest`
-2. SSH into the deployment host and run:
-   - `docker login`
-   - `docker pull` newest tag
-   - `docker compose` (in `$DEPLOY_PATH`) with `IMAGE_REF` set to the freshly pushed tag to recreate the stack
-
-#### Required GitHub Secrets
-| Secret | Purpose |
-| --- | --- |
-| `REGISTRY` | Registry host (e.g. `ghcr.io/owner` or `docker.io/username`) |
-| `REGISTRY_USERNAME` / `REGISTRY_PASSWORD` | Credentials for Docker registry |
-| `IMAGE_NAME` | Repository/image name (e.g. `tasks-api`) |
-| `SSH_HOST`, `SSH_USER`, `SSH_KEY` | Deployment target info |
-| `DEPLOY_PATH` | Path on the server containing `docker-compose.yml` |
-
-Remote host prerequisites:
-- Docker Engine + Compose plugin
-- `.env` containing runtime secrets (`JWT_SECRET`, database URL, etc.)
-- Repo (or deployment bundle) placed at `$DEPLOY_PATH`
+- Mirrors the pull-request workflow (checkout → install → lint → test → build) to guarantee main stays green.
+- No automated image publishing/deployment is wired in by default; extend the workflow when you are ready for push-based CD.
 
 ## Docker & Compose
 
@@ -129,6 +118,7 @@ src/
   utils/             Env, logging, crypto helpers
 tests/               Jest + Supertest suites
 db/migrations/       SQL schema definition
+public/              Tailwind-enhanced vanilla JS dashboard
 ```
 
 ## Next Steps

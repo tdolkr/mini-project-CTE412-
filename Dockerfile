@@ -10,6 +10,7 @@ COPY tsconfig.json ./
 COPY .eslintrc.cjs ./
 COPY jest.config.ts ./
 COPY src ./src
+COPY public ./public
 
 RUN npm run build
 RUN npm prune --omit=dev
@@ -24,6 +25,7 @@ COPY --from=base /app/package.json ./
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/dist ./dist
 COPY db ./db
+COPY public ./public
 
 EXPOSE 3000
 
