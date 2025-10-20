@@ -11,6 +11,12 @@ const userNameEl = document.querySelector('#user-name');
 const userEmailEl = document.querySelector('#user-email');
 const toast = document.querySelector('#toast');
 const taskTemplate = document.querySelector('#task-item-template');
+const lastSyncEl = document.querySelector('#last-sync');
+const summaryElements = {
+  pending: document.querySelector('[data-summary="pending"]'),
+  in_progress: document.querySelector('[data-summary="in_progress"]'),
+  done: document.querySelector('[data-summary="done"]')
+};
 
 const TOKEN_KEY = 'tasks_api_token';
 const USER_KEY = 'tasks_api_user';
@@ -31,17 +37,17 @@ const statusStyles = {
   pending: {
     label: 'Pending',
     className:
-      'border-yellow-400/40 bg-yellow-400/10 text-yellow-300'
+      'border-yellow-400/60 bg-yellow-400/10 text-yellow-200'
   },
   in_progress: {
     label: 'In progress',
     className:
-      'border-sky-400/50 bg-sky-400/10 text-sky-300'
+      'border-sky-400/60 bg-sky-400/10 text-sky-200'
   },
   done: {
     label: 'Done',
     className:
-      'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+      'border-emerald-400/60 bg-emerald-400/10 text-emerald-200'
   }
 };
 
@@ -49,14 +55,14 @@ function showToast(message, type = 'info') {
   if (!toast) return;
 
   const palette = {
-    info: 'border-sky-500/40 bg-slate-900/95 text-slate-100',
-    success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
+    info: 'border-sky-500/40 bg-slateglass-900/95 text-slate-100',
+    success: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100',
     error: 'border-red-500/60 bg-red-500/10 text-red-100'
   };
 
   toast.textContent = message;
   toast.className =
-    'pointer-events-none fixed inset-x-0 top-4 z-50 mx-auto w-full max-w-md rounded-xl px-4 py-3 text-sm shadow-lg transition';
+    'pointer-events-none fixed inset-x-0 top-4 z-50 mx-auto w-full max-w-lg rounded-2xl px-5 py-4 text-sm font-medium shadow-[0_25px_50px_-30px_rgba(14,165,233,0.45)] transition';
   toast.classList.add(palette[type] ?? palette.info);
   toast.classList.remove('hidden');
 
@@ -121,7 +127,7 @@ function updateUI() {
     authPanel.classList.add('hidden');
     appPanel.classList.remove('hidden');
     userNameEl.textContent = user.name;
-    userEmailEl.textContent = `<${user.email}>`;
+    userEmailEl.textContent = user.email;
     loadTasks().catch((error) =>
       showToast(error.message ?? 'Unable to fetch tasks', 'error')
     );
@@ -130,22 +136,52 @@ function updateUI() {
     appPanel.classList.add('hidden');
     taskList.innerHTML = '';
     emptyState.classList.remove('hidden');
+    updateSummary([]);
+    if (lastSyncEl) {
+      lastSyncEl.textContent = '—';
+    }
   }
 }
 
 function formatDate(value) {
   if (!value) return '—';
   try {
+    const date =
+      value instanceof Date ? value : new Date(value);
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short'
-    }).format(new Date(value));
+    }).format(date);
   } catch {
     return value;
   }
 }
 
+function updateSummary(tasks = []) {
+  const totals = {
+    pending: 0,
+    in_progress: 0,
+    done: 0
+  };
+
+  for (const task of tasks) {
+    if (task.status && totals.hasOwnProperty(task.status)) {
+      totals[task.status] += 1;
+    }
+  }
+
+  Object.entries(summaryElements).forEach(([key, element]) => {
+    if (!element) return;
+    element.textContent = String(totals[key] ?? 0);
+  });
+
+  if (lastSyncEl) {
+    lastSyncEl.textContent = formatDate(new Date());
+  }
+}
+
 function renderTasks(tasks = []) {
+  updateSummary(tasks);
   taskList.innerHTML = '';
 
   if (tasks.length === 0) {
@@ -185,8 +221,8 @@ function renderTasks(tasks = []) {
     )}`;
 
     const statusStyle = statusStyles[task.status] ?? statusStyles.pending;
-    badgeEl.textContent = statusStyle.label;
-    badgeEl.className = `rounded-full px-3 py-1 text-xs font-semibold border ${statusStyle.className} task-status-badge`;
+    badgeEl.textContent = statusStyle.label.toUpperCase();
+    badgeEl.className = `rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest ${statusStyle.className} task-status-badge`;
     statusSelect.value = task.status;
 
     saveBtn.addEventListener('click', async () => {
