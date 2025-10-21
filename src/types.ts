@@ -6,15 +6,25 @@ export interface User {
   createdAt: Date;
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'done';
-
-export interface Task {
+export interface Todo {
   id: string;
   userId: string;
   title: string;
-  description: string | null;
-  dueDate: Date | null;
-  status: TaskStatus;
   createdAt: Date;
-  updatedAt: Date;
+}
+
+export interface Habit {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  createdAt: Date;
+}
+
+export interface HabitEntry {
+  id: string;
+  habitId: string;
+  entryDate: Date;
+  completed: boolean;
+  createdAt: Date;
 }

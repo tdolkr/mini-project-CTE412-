@@ -1,0 +1,130 @@
+import { getPool } from './pool';
+import { Habit, HabitEntry } from '../types';
+
+interface CreateHabitInput {
+  userId: string;
+  name: string;
+  description?: string | null;
+}
+
+interface UpsertHabitEntryInput {
+  habitId: string;
+  entryDate: Date;
+  completed?: boolean;
+}
+
+const mapHabitRow = (row: any): Habit => ({
+  id: row.id,
+  userId: row.user_id,
+  name: row.name,
+  description: row.description,
+  createdAt: row.created_at
+});
+
+const mapHabitEntryRow = (row: any): HabitEntry => ({
+  id: row.id,
+  habitId: row.habit_id,
+  entryDate: row.entry_date,
+  completed: row.completed,
+  createdAt: row.created_at
+});
+
+export const createHabit = async (input: CreateHabitInput): Promise<Habit> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      INSERT INTO habits (user_id, name, description)
+      VALUES ($1, $2, $3)
+      RETURNING id, user_id, name, description, created_at
+    `,
+    [input.userId, input.name, input.description ?? null]
+  );
+  return mapHabitRow(result.rows[0]);
+};
+
+export const listHabitsForUser = async (userId: string): Promise<Habit[]> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      SELECT id, user_id, name, description, created_at
+      FROM habits
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `,
+    [userId]
+  );
+  return result.rows.map(mapHabitRow);
+};
+
+export const findHabitById = async (id: string): Promise<Habit | null> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      SELECT id, user_id, name, description, created_at
+      FROM habits
+      WHERE id = $1
+    `,
+    [id]
+  );
+  if (result.rowCount === 0) {
+    return null;
+  }
+  return mapHabitRow(result.rows[0]);
+};
+
+export const deleteHabit = async (id: string, userId: string): Promise<boolean> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      DELETE FROM habits
+      WHERE id = $1 AND user_id = $2
+    `,
+    [id, userId]
+  );
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const upsertHabitEntry = async (input: UpsertHabitEntryInput): Promise<HabitEntry> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      INSERT INTO habit_entries (habit_id, entry_date, completed)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (habit_id, entry_date)
+      DO UPDATE SET completed = EXCLUDED.completed, created_at = NOW()
+      RETURNING id, habit_id, entry_date, completed, created_at
+    `,
+    [input.habitId, input.entryDate, input.completed ?? true]
+  );
+  return mapHabitEntryRow(result.rows[0]);
+};
+
+export const removeHabitEntry = async (habitId: string, entryDate: Date): Promise<boolean> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      DELETE FROM habit_entries
+      WHERE habit_id = $1 AND entry_date = $2
+    `,
+    [habitId, entryDate]
+  );
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const listHabitEntriesForRange = async (
+  habitId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<HabitEntry[]> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      SELECT id, habit_id, entry_date, completed, created_at
+      FROM habit_entries
+      WHERE habit_id = $1 AND entry_date BETWEEN $2 AND $3
+      ORDER BY entry_date DESC
+    `,
+    [habitId, startDate, endDate]
+  );
+  return result.rows.map(mapHabitEntryRow);
+};

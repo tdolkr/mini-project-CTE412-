@@ -40,7 +40,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await pool.query('TRUNCATE TABLE tasks RESTART IDENTITY CASCADE;');
+  await pool.query('TRUNCATE TABLE habit_entries RESTART IDENTITY CASCADE;');
+  await pool.query('TRUNCATE TABLE habits RESTART IDENTITY CASCADE;');
+  await pool.query('TRUNCATE TABLE todos RESTART IDENTITY CASCADE;');
   await pool.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE;');
 });
 

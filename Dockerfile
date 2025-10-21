@@ -10,9 +10,10 @@ COPY tsconfig.json ./
 COPY .eslintrc.cjs ./
 COPY jest.config.ts ./
 COPY src ./src
-COPY public ./public
-
 RUN npm run build
+COPY frontend ./frontend
+RUN npm install --prefix frontend
+RUN npm run build --prefix frontend
 RUN npm prune --omit=dev
 
 FROM node:20-alpine AS production
@@ -25,7 +26,7 @@ COPY --from=base /app/package.json ./
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/dist ./dist
 COPY db ./db
-COPY public ./public
+COPY --from=base /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000
 

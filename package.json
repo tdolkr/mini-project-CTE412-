@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "web:dev": "npm --prefix frontend run dev",
+    "web:build": "npm --prefix frontend run build",
+    "web:preview": "npm --prefix frontend run preview"
   },
   "keywords": [
     "express",

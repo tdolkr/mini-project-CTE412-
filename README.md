@@ -1,13 +1,13 @@
-# Tasks API Platform
+# Habit Tracker Platform
 
-Opinionated REST API for managing personal tasks with JWT-based authentication, automated CI/CD, and Dockerized deployments.
+REST API + React front-end for tracking daily habits and lightweight todos with JWT-based authentication, automated CI, and Dockerized deployment.
 
 ## Stack
 - Node.js 20 + TypeScript + Express
 - PostgreSQL 15
 - JWT (HS256) + bcrypt password hashing
 - Jest + Supertest integration tests (backed by `pg-mem`)
-- Vanilla JS + TailwindCSS web client (served statically)
+- React + TailwindCSS web client (Vite)
 - Docker/Docker Compose
 - GitHub Actions CI
 
@@ -15,11 +15,13 @@ Opinionated REST API for managing personal tasks with JWT-based authentication, 
 | Table | Fields |
 | --- | --- |
 | `users` | `id` (uuid, PK), `email` (unique), `password_hash`, `name`, `created_at` |
-| `tasks` | `id` (uuid, PK), `user_id` (FK → users.id, cascade delete), `title`, `description`, `due_date`, `status` (`pending`/`in_progress`/`done`), `created_at`, `updated_at` |
+| `habits` | `id` (uuid, PK), `user_id` (FK → users.id), `name`, `description`, `created_at` |
+| `habit_entries` | `id` (uuid, PK), `habit_id` (FK → habits.id), `entry_date`, `completed`, `created_at`, UNIQUE(habit_id, entry_date) |
+| `todos` | `id` (uuid, PK), `user_id` (FK → users.id), `title`, `created_at` |
 
 Relationships:
-- Each task belongs to one user.
-- Deleting a user cascades to their tasks.
+- Each habit and todo belongs to one user.
+- Habit entries cascade when a habit is removed.
 
 Schema is defined in `db/migrations/001_init.sql` and auto-applied by Postgres on container start.
 
@@ -33,39 +35,52 @@ All protected endpoints expect `Authorization: Bearer <JWT>` with 1-hour expiry 
 | `POST` | `/auth/register` | Create account & issue access token | JSON: `{ email, password, name }` | `201 Created` `{ token, user }`; `409` email exists; `400` validation error |
 | `POST` | `/auth/login` | Exchange credentials for access token | JSON: `{ email, password }` | `200 OK` `{ token, user }`; `401` invalid creds |
 
-### Tasks (authenticated)
+### Habits (authenticated)
 
 | Method | Path | Description | Request | Responses |
 | --- | --- | --- | --- | --- |
-| `GET` | `/tasks` | List current user's tasks (newest first) | – | `200 OK` `{ tasks: Task[] }` |
-| `POST` | `/tasks` | Create task | JSON: `{ title, description?, dueDate? }` | `201 Created` `{ task }`; `400` validation |
-| `GET` | `/tasks/:id` | Fetch single task | – | `200 OK` `{ task }`; `404` not found |
-| `PUT` | `/tasks/:id` | Update task attributes/status | JSON: `{ title?, description?, dueDate?, status? }` | `200 OK` `{ task }`; `404` not found; `400` validation |
-| `DELETE` | `/tasks/:id` | Remove task | – | `204 No Content`; `404` not found |
+| `GET` | `/habits` | List user habits with recent check-ins | – | `200 OK` `{ habits: HabitWithEntries[] }` |
+| `POST` | `/habits` | Create a habit | JSON: `{ name, description? }` | `201 Created` `{ habit }`; `400` validation |
+| `DELETE` | `/habits/:id` | Remove a habit | – | `204 No Content`; `404` not found |
+| `POST` | `/habits/:id/checkins` | Mark habit completion (defaults to today) | JSON: `{ date?, completed? }` | `204 No Content`; `404` not found |
+| `DELETE` | `/habits/:id/checkins/:date` | Clear completion for a given day (ISO date) | – | `204 No Content`; `404` not found |
 
-`dueDate` accepts ISO8601 strings (or `null`). `status` must be one of `pending`, `in_progress`, `done`.
+### Todos (authenticated)
+
+| Method | Path | Description | Request | Responses |
+| --- | --- | --- | --- | --- |
+| `GET` | `/todos` | List todo items | – | `200 OK` `{ todos: Todo[] }` |
+| `POST` | `/todos` | Create todo | JSON: `{ title }` | `201 Created` `{ todo }`; `400` validation |
+| `DELETE` | `/todos/:id` | Remove todo | – | `204 No Content`; `404` not found |
 
 ## Local Development
 
 1. Copy environment template: `cp .env.example .env` and adjust values.
-2. Install dependencies: `npm install`
-3. Useful scripts:
-   - `npm run dev` – hot-reload server
-   - `npm run lint` – ESLint checks
-   - `npm test` – Jest + Supertest suite (uses in-memory Postgres via `pg-mem`)
-   - `npm run build` / `npm start`
-4. Dockerized stack: `docker compose up --build`
+2. Install backend deps: `npm install`
+3. Install frontend deps: `npm install` inside `frontend/`
+4. Useful scripts:
+   - API dev server: `npm run dev`
+   - Web dev server (Vite): `npm run web:dev`
+   - Tests: `npm test`
+   - Lint: `npm run lint`
+   - Builds: `npm run build` (API) and `npm run web:build` (client)
+5. Dockerized stack: `docker compose up --build`
    - Exposes API & web client on `http://localhost:3000`
    - PostgreSQL available on `localhost:5432` with credentials from `docker-compose.yml`
    - Mounts SQL migrations into the database container for automatic bootstrapping
-5. Visit `http://localhost:3000/` to use the Tailwind-powered dashboard (register/login, create tasks, update status, delete).
+6. Frontend entry points (served by Express SPA fallback):
+   - `http://localhost:3000/` → Landing page
+   - `http://localhost:3000/auth` → Register / login portal
+   - `http://localhost:3000/dashboard` → Authenticated workspace (JWT required)
 
 ## Web Client
-The `public/` directory contains a zero-build, vanilla JS + Tailwind interface served by Express:
-- Register/login forms issue JWTs and persist the access token in local storage.
-- Authenticated workspace shows the current user, provides task creation with optional descriptions/due dates, and renders all tasks with status badges.
-- Inline actions let you update task status or delete records; the refresh button re-syncs with the API.
-- Toast notifications surface errors/success states for quick feedback.
+The `frontend/` directory contains a Vite-powered React app styled with TailwindCSS:
+- `src/screens/LandingPage.tsx` – Aurora-inspired overview with CTAs into auth & dashboard flows.
+- `src/screens/AuthPage.tsx` – Handles registration/login, persists JWTs in local storage, and redirects on success.
+- `src/screens/DashboardPage.tsx` – Presents metrics, timeline radar, daily habit toggles, and todo management with JWT guard.
+- `src/lib/*` & `src/components/*` – Shared API client, storage helpers, toast notifications, and router setup.
+- `src/index.css` + `tailwind.config.ts` – Custom gradients, glassmorphism, and animation accents layered atop Tailwind utilities.
+- `npm run web:dev` launches the React dev server, while `npm run web:build` creates the production bundle consumed by Express.
 
 ## CI Pipeline
 Defined in `.github/workflows/ci-cd.yml`.
@@ -111,17 +126,20 @@ docker compose up -d --remove-orphans
 src/
   app.ts             Express app wiring & middleware
   index.ts           HTTP entrypoint
-  controllers/       HTTP controllers (auth, tasks)
+  controllers/       HTTP controllers (auth, habits, todos)
   services/          Domain logic
   db/                PG pool + repositories
   middleware/        Auth + error handling
   utils/             Env, logging, crypto helpers
 tests/               Jest + Supertest suites
 db/migrations/       SQL schema definition
-public/              Tailwind-enhanced vanilla JS dashboard
+frontend/
+  src/              React pages, components, hooks, and API helpers
+  public/           Static assets (e.g., favicon)
+  index.html        Vite entry point
 ```
 
 ## Next Steps
 - Add refresh tokens / logout endpoints if longer sessions are needed.
 - Integrate migration tool (e.g. `node-pg-migrate`) for versioned rollouts.
-- Expand domain (labels, reminders, task activity feed) as requirements evolve.
+- Expand domain (habit streak analytics, reminders, social accountability) as requirements evolve.
