@@ -4,13 +4,15 @@ import {
   createHabit,
   deleteHabit,
   markHabit,
-  clearHabit
+  clearHabit,
+  updateHabit
 } from '../controllers/habitController';
 
 const router = Router();
 
 router.get('/', listHabits);
 router.post('/', createHabit);
+router.put('/:id', updateHabit);
 router.delete('/:id', deleteHabit);
 router.post('/:id/checkins', markHabit);
 router.delete('/:id/checkins/:date', clearHabit);

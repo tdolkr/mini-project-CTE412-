@@ -41,4 +41,24 @@ describe('Habit endpoints', () => {
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.habits[0].entries.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('updates habit details', async () => {
+    const token = await registerAndLogin();
+
+    const createResponse = await request(app)
+      .post('/habits')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Read book', description: '15 minutes' });
+
+    const habitId = createResponse.body.habit.id as string;
+
+    const updateResponse = await request(app)
+      .put(`/habits/${habitId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Read novel', description: '20 minutes' });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.habit.name).toBe('Read novel');
+    expect(updateResponse.body.habit.description).toBe('20 minutes');
+  });
 });

@@ -152,9 +152,6 @@ const AuthForms: FC = () => {
             >
               {loginState.loading ? 'Signing in…' : 'Log in'}
             </button>
-            <p className="text-xs text-slate-500">
-              Tokens are stored in local storage. Use the dashboard log-out button if you are on a shared device.
-            </p>
           </form>
         </section>
       </div>

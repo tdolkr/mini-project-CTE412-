@@ -5,7 +5,8 @@ import {
   upsertHabitEntry,
   removeHabitEntry,
   listHabitEntriesForRange,
-  findHabitById
+  findHabitById,
+  updateHabit
 } from '../db/habitRepository';
 import { AppError } from '../utils/errors';
 import { Habit } from '../types';
@@ -45,14 +46,76 @@ export const deleteHabitForUser = async (userId: string, habitId: string): Promi
   }
 };
 
+export const updateHabitForUser = async (
+  userId: string,
+  habitId: string,
+  input: { name?: string; description?: string | null }
+) => {
+  const habit = await ensureHabitBelongsToUser(habitId, userId);
+  if (typeof input.name !== 'undefined' && !input.name.trim()) {
+    throw new AppError('Name is required', 400);
+  }
+
+  const updated = await updateHabit(habitId, userId, {
+    name: typeof input.name === 'string' ? input.name.trim() : undefined,
+    description: typeof input.description === 'string' ? input.description : input.description
+  });
+
+  if (!updated) {
+    throw new AppError('Habit not found', 404);
+  }
+
+  return updated;
+};
+
+const coerceDate = (input: string | Date): Date => {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    throw new AppError('Invalid date provided', 400);
+  }
+  return date;
+};
+
+const startOfDay = (date: Date): Date => {
+  const cloned = new Date(date);
+  cloned.setHours(0, 0, 0, 0);
+  return cloned;
+};
+
+const endOfDay = (date: Date): Date => {
+  const cloned = new Date(date);
+  cloned.setHours(23, 59, 59, 999);
+  return cloned;
+};
+
 export const listHabitsWithEntries = async (
   userId: string,
-  days: number = DEFAULT_RANGE_DAYS
+  options: { startDate?: string; endDate?: string; days?: number } = {}
 ): Promise<HabitWithEntries[]> => {
   const habits = await listHabitsForUser(userId);
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days + 1);
-  const endDate = new Date();
+  let startDate: Date;
+  let endDate: Date;
+
+  if (options.startDate || options.endDate) {
+    if (!options.startDate || !options.endDate) {
+      throw new AppError('Both start and end dates are required', 400);
+    }
+    const parsedStart = coerceDate(options.startDate);
+    const parsedEnd = coerceDate(options.endDate);
+    if (parsedStart > parsedEnd) {
+      throw new AppError('Start date must be before end date', 400);
+    }
+    startDate = startOfDay(parsedStart);
+    endDate = endOfDay(parsedEnd);
+  } else {
+    const rangeDays = options.days ?? DEFAULT_RANGE_DAYS;
+    if (rangeDays <= 0) {
+      throw new AppError('Range days must be positive', 400);
+    }
+    endDate = endOfDay(new Date());
+    startDate = startOfDay(new Date(endDate));
+    startDate.setDate(startDate.getDate() - rangeDays + 1);
+  }
 
   const results = await Promise.all(
     habits.map(async (habit) => {
@@ -94,7 +157,8 @@ export const clearHabitCompletion = async (habitId: string, userId: string, date
   if (Number.isNaN(entryDate.getTime())) {
     throw new AppError('Invalid date provided', 400);
   }
-  const removed = await removeHabitEntry(habitId, entryDate);
+  const normalizedDate = entryDate.toISOString().slice(0, 10);
+  const removed = await removeHabitEntry(habitId, normalizedDate);
   if (!removed) {
     throw new AppError('Habit check-in not found', 404);
   }

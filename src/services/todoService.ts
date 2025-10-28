@@ -1,4 +1,4 @@
-import { createTodo, listTodosForUser, deleteTodo } from '../db/todoRepository';
+import { createTodo, listTodosForUser, deleteTodo, updateTodo } from '../db/todoRepository';
 import { AppError } from '../utils/errors';
 import { Todo } from '../types';
 
@@ -18,4 +18,15 @@ export const deleteTodoForUser = async (userId: string, todoId: string): Promise
   if (!removed) {
     throw new AppError('Todo not found', 404);
   }
+};
+
+export const updateTodoForUser = async (userId: string, todoId: string, title: string): Promise<Todo> => {
+  if (!title.trim()) {
+    throw new AppError('Title is required', 400);
+  }
+  const updated = await updateTodo(todoId, userId, title.trim());
+  if (!updated) {
+    throw new AppError('Todo not found', 404);
+  }
+  return updated;
 };

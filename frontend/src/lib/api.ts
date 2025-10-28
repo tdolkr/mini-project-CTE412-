@@ -61,15 +61,25 @@ export const api = {
     const { data } = await client.post<{ todo: Todo }>('/todos', payload);
     return data.todo;
   },
+  async updateTodo(id: string, payload: { title: string }) {
+    const { data } = await client.put<{ todo: Todo }>(`/todos/${id}`, payload);
+    return data.todo;
+  },
   async deleteTodo(id: string) {
     await client.delete(`/todos/${id}`);
   },
-  async listHabits() {
-    const { data } = await client.get<{ habits: HabitDTO[] }>('/habits');
+  async listHabits(params?: { start?: string; end?: string; days?: number }) {
+    const { data } = await client.get<{ habits: HabitDTO[] }>('/habits', {
+      params
+    });
     return data.habits;
   },
   async createHabit(payload: { name: string; description?: string | null }) {
     const { data } = await client.post<{ habit: HabitDTO }>('/habits', payload);
+    return data.habit;
+  },
+  async updateHabit(id: string, payload: { name?: string; description?: string | null }) {
+    const { data } = await client.put<{ habit: HabitDTO }>(`/habits/${id}`, payload);
     return data.habit;
   },
   async deleteHabit(id: string) {

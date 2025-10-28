@@ -6,7 +6,8 @@ import {
   deleteHabitForUser,
   listHabitsWithEntries,
   markHabitCompletion,
-  clearHabitCompletion
+  clearHabitCompletion,
+  updateHabitForUser
 } from '../services/habitService';
 
 const createHabitSchema = z.object({
@@ -19,10 +20,26 @@ const markSchema = z.object({
   completed: z.boolean().optional()
 });
 
+const updateHabitSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().max(300).optional().nullable()
+});
+
+const listHabitsQuerySchema = z.object({
+  start: z.string().optional(),
+  end: z.string().optional(),
+  days: z.coerce.number().int().positive().optional()
+});
+
 export const listHabits = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const habits = await listHabitsWithEntries(user.id);
+    const query = listHabitsQuerySchema.parse(req.query);
+    const habits = await listHabitsWithEntries(user.id, {
+      startDate: query.start,
+      endDate: query.end,
+      days: query.days
+    });
     res.status(200).json({ habits });
   } catch (error) {
     next(error);
@@ -45,6 +62,17 @@ export const deleteHabit = async (req: AuthenticatedRequest, res: Response, next
     const user = req.user!;
     await deleteHabitForUser(user.id, req.params.id);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateHabit = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const payload = updateHabitSchema.parse(req.body);
+    const habit = await updateHabitForUser(user.id, req.params.id, payload);
+    res.status(200).json({ habit });
   } catch (error) {
     next(error);
   }

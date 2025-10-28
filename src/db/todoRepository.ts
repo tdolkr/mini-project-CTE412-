@@ -51,3 +51,20 @@ export const deleteTodo = async (id: string, userId: string): Promise<boolean> =
   );
   return (result.rowCount ?? 0) > 0;
 };
+
+export const updateTodo = async (id: string, userId: string, title: string): Promise<Todo | null> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      UPDATE todos
+      SET title = $1
+      WHERE id = $2 AND user_id = $3
+      RETURNING id, user_id, title, created_at
+    `,
+    [title, id, userId]
+  );
+  if (result.rowCount === 0) {
+    return null;
+  }
+  return mapRowToTodo(result.rows[0]);
+};

@@ -99,14 +99,14 @@ export const upsertHabitEntry = async (input: UpsertHabitEntryInput): Promise<Ha
   return mapHabitEntryRow(result.rows[0]);
 };
 
-export const removeHabitEntry = async (habitId: string, entryDate: Date): Promise<boolean> => {
+export const removeHabitEntry = async (habitId: string, entryDateISO: string): Promise<boolean> => {
   const pool = getPool();
   const result = await pool.query(
     `
       DELETE FROM habit_entries
-      WHERE habit_id = $1 AND entry_date = $2
+      WHERE habit_id = $1 AND entry_date = $2::date
     `,
-    [habitId, entryDate]
+    [habitId, entryDateISO]
   );
   return (result.rowCount ?? 0) > 0;
 };
@@ -127,4 +127,49 @@ export const listHabitEntriesForRange = async (
     [habitId, startDate, endDate]
   );
   return result.rows.map(mapHabitEntryRow);
+};
+
+export const updateHabit = async (
+  habitId: string,
+  userId: string,
+  input: { name?: string; description?: string | null }
+): Promise<Habit | null> => {
+  const fields: string[] = [];
+  const values: (string | null)[] = [];
+
+  if (typeof input.name !== 'undefined') {
+    fields.push('name = $' + (fields.length + 1));
+    values.push(input.name);
+  }
+  if (typeof input.description !== 'undefined') {
+    fields.push('description = $' + (fields.length + 1));
+    values.push(input.description ?? null);
+  }
+
+  if (fields.length === 0) {
+    const habit = await findHabitById(habitId);
+    if (!habit || habit.userId !== userId) {
+      return null;
+    }
+    return habit;
+  }
+
+  const pool = getPool();
+  values.push(habitId, userId);
+
+  const result = await pool.query(
+    `
+      UPDATE habits
+      SET ${fields.join(', ')}
+      WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
+      RETURNING id, user_id, name, description, created_at
+    `,
+    values
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  return mapHabitRow(result.rows[0]);
 };
