@@ -52,7 +52,7 @@ export const updateHabitForUser = async (
   habitId: string,
   input: { name?: string; description?: string | null }
 ) => {
-  const habit = await ensureHabitBelongsToUser(habitId, userId);
+  await ensureHabitBelongsToUser(habitId, userId);
   if (typeof input.name !== 'undefined' && !input.name.trim()) {
     throw new AppError('Name is required', 400);
   }

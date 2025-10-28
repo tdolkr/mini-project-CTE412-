@@ -1,6 +1,22 @@
 import { getPool } from './pool';
 import { Habit, HabitEntry } from '../types';
 
+type HabitRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: Date;
+};
+
+type HabitEntryRow = {
+  id: string;
+  habit_id: string;
+  entry_date: Date;
+  completed: boolean;
+  created_at: Date;
+};
+
 interface CreateHabitInput {
   userId: string;
   name: string;
@@ -13,7 +29,7 @@ interface UpsertHabitEntryInput {
   completed?: boolean;
 }
 
-const mapHabitRow = (row: any): Habit => ({
+const mapHabitRow = (row: HabitRow): Habit => ({
   id: row.id,
   userId: row.user_id,
   name: row.name,
@@ -21,7 +37,7 @@ const mapHabitRow = (row: any): Habit => ({
   createdAt: row.created_at
 });
 
-const mapHabitEntryRow = (row: any): HabitEntry => ({
+const mapHabitEntryRow = (row: HabitEntryRow): HabitEntry => ({
   id: row.id,
   habitId: row.habit_id,
   entryDate: row.entry_date,

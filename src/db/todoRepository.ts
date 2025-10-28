@@ -1,12 +1,19 @@
 import { getPool } from './pool';
 import { Todo } from '../types';
 
+type TodoRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  created_at: Date;
+};
+
 interface CreateTodoInput {
   userId: string;
   title: string;
 }
 
-const mapRowToTodo = (row: any): Todo => ({
+const mapRowToTodo = (row: TodoRow): Todo => ({
   id: row.id,
   userId: row.user_id,
   title: row.title,
