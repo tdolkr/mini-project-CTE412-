@@ -302,9 +302,6 @@ const DashboardInner: FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-900">Weekly Habit Tracker</h2>
-                <p className="text-sm text-slate-600">
-                  Plan your week and mark progress for each day at a glance.
-                </p>
               </div>
               <span className="text-sm font-medium text-slate-700">{getWeekRangeLabel(selectedWeekStart)}</span>
             </div>

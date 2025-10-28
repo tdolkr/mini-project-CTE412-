@@ -19,6 +19,7 @@ export interface HabitWithEntries extends Habit {
 }
 
 const DEFAULT_RANGE_DAYS = 14;
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export const createHabitForUser = async (
   userId: string,
@@ -88,6 +89,32 @@ const endOfDay = (date: Date): Date => {
   return cloned;
 };
 
+const validateISODate = (value: string): string => {
+  if (!ISO_DATE_REGEX.test(value)) {
+    throw new AppError('Invalid date provided', 400);
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const utcDate = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() !== (month ?? 1) - 1 ||
+    utcDate.getUTCDate() !== day
+  ) {
+    throw new AppError('Invalid date provided', 400);
+  }
+  return value;
+};
+
+const isoDateToUTCDate = (value: string): Date => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+};
+
+const todayUTCDate = (): Date => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+};
+
 export const listHabitsWithEntries = async (
   userId: string,
   options: { startDate?: string; endDate?: string; days?: number } = {}
@@ -140,9 +167,12 @@ export const markHabitCompletion = async (
   options: { date?: string; completed?: boolean }
 ) => {
   await ensureHabitBelongsToUser(habitId, userId);
-  const entryDate = options.date ? new Date(options.date) : new Date();
-  if (Number.isNaN(entryDate.getTime())) {
-    throw new AppError('Invalid date provided', 400);
+  let entryDate: Date;
+  if (options.date) {
+    const normalized = validateISODate(options.date);
+    entryDate = isoDateToUTCDate(normalized);
+  } else {
+    entryDate = todayUTCDate();
   }
   await upsertHabitEntry({
     habitId,
@@ -153,12 +183,8 @@ export const markHabitCompletion = async (
 
 export const clearHabitCompletion = async (habitId: string, userId: string, date: string) => {
   await ensureHabitBelongsToUser(habitId, userId);
-  const entryDate = new Date(date);
-  if (Number.isNaN(entryDate.getTime())) {
-    throw new AppError('Invalid date provided', 400);
-  }
-  const normalizedDate = entryDate.toISOString().slice(0, 10);
-  const removed = await removeHabitEntry(habitId, normalizedDate);
+  const normalized = validateISODate(date);
+  const removed = await removeHabitEntry(habitId, normalized);
   if (!removed) {
     throw new AppError('Habit check-in not found', 404);
   }
