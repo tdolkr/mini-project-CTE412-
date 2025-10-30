@@ -13,11 +13,7 @@ const loginSchema = z.object({
   password: z.string().min(8)
 });
 
-export const register = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = registerSchema.parse(req.body);
     const result = await registerUser(payload);
@@ -27,11 +23,7 @@ export const register = async (
   }
 };
 
-export const login = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = loginSchema.parse(req.body);
     const result = await authenticateUser(payload.email, payload.password);

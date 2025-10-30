@@ -1,7 +1,4 @@
-import {
-  createUser,
-  findUserByEmail
-} from '../db/userRepository';
+import { createUser, findUserByEmail } from '../db/userRepository';
 import { hashPassword, comparePassword } from '../utils/password';
 import { signAccessToken } from '../utils/token';
 import { AppError } from '../utils/errors';
@@ -21,9 +18,7 @@ interface AuthResponse {
   };
 }
 
-export const registerUser = async (
-  input: RegisterInput
-): Promise<AuthResponse> => {
+export const registerUser = async (input: RegisterInput): Promise<AuthResponse> => {
   const existing = await findUserByEmail(input.email);
   if (existing) {
     throw new AppError('Email already registered', 409);

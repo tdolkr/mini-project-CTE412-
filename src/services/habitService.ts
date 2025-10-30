@@ -4,6 +4,7 @@ import {
   deleteHabit,
   upsertHabitEntry,
   removeHabitEntry,
+  removeHabitEntryByCreatedDate,
   listHabitEntriesForRange,
   findHabitById,
   updateHabit
@@ -69,14 +70,6 @@ export const updateHabitForUser = async (
   return updated;
 };
 
-const coerceDate = (input: string | Date): Date => {
-  const date = input instanceof Date ? input : new Date(input);
-  if (Number.isNaN(date.getTime())) {
-    throw new AppError('Invalid date provided', 400);
-  }
-  return date;
-};
-
 const startOfDay = (date: Date): Date => {
   const cloned = new Date(date);
   cloned.setHours(0, 0, 0, 0);
@@ -89,31 +82,38 @@ const endOfDay = (date: Date): Date => {
   return cloned;
 };
 
-const validateISODate = (value: string): string => {
-  if (!ISO_DATE_REGEX.test(value)) {
-    throw new AppError('Invalid date provided', 400);
-  }
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseISODate = (value: string): Date => {
   const [year, month, day] = value.split('-').map(Number);
-  const utcDate = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+  const parsed = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
   if (
-    utcDate.getUTCFullYear() !== year ||
-    utcDate.getUTCMonth() !== (month ?? 1) - 1 ||
-    utcDate.getUTCDate() !== day
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== (month ?? 1) - 1 ||
+    parsed.getDate() !== day
   ) {
     throw new AppError('Invalid date provided', 400);
   }
+  return parsed;
+};
+
+const ensureISODate = (value: string): string => {
+  if (!ISO_DATE_REGEX.test(value)) {
+    throw new AppError('Invalid date provided', 400);
+  }
+  parseISODate(value);
   return value;
 };
 
-const isoDateToUTCDate = (value: string): Date => {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
-};
-
-const todayUTCDate = (): Date => {
-  const now = new Date();
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-};
+const todayISO = (): string => formatLocalDate(new Date());
 
 export const listHabitsWithEntries = async (
   userId: string,
@@ -127,8 +127,10 @@ export const listHabitsWithEntries = async (
     if (!options.startDate || !options.endDate) {
       throw new AppError('Both start and end dates are required', 400);
     }
-    const parsedStart = coerceDate(options.startDate);
-    const parsedEnd = coerceDate(options.endDate);
+    const normalizedStart = ensureISODate(options.startDate);
+    const normalizedEnd = ensureISODate(options.endDate);
+    const parsedStart = parseISODate(normalizedStart);
+    const parsedEnd = parseISODate(normalizedEnd);
     if (parsedStart > parsedEnd) {
       throw new AppError('Start date must be before end date', 400);
     }
@@ -144,12 +146,20 @@ export const listHabitsWithEntries = async (
     startDate.setDate(startDate.getDate() - rangeDays + 1);
   }
 
+  const startISO = formatLocalDate(startDate);
+  const endISO = formatLocalDate(endDate);
+
   const results = await Promise.all(
     habits.map(async (habit) => {
-      const entries = await listHabitEntriesForRange(habit.id, startDate, endDate);
+      const entries = await listHabitEntriesForRange(
+        habit.id,
+        startISO,
+        endISO
+      );
       const mapped = entries.map((entry) => {
         const rawDate = entry.entryDate;
-        const iso = rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : String(rawDate);
+        const iso =
+          rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : String(rawDate);
         return {
           date: iso,
           completed: entry.completed
@@ -167,13 +177,7 @@ export const markHabitCompletion = async (
   options: { date?: string; completed?: boolean }
 ) => {
   await ensureHabitBelongsToUser(habitId, userId);
-  let entryDate: Date;
-  if (options.date) {
-    const normalized = validateISODate(options.date);
-    entryDate = isoDateToUTCDate(normalized);
-  } else {
-    entryDate = todayUTCDate();
-  }
+  const entryDate = options.date ? ensureISODate(options.date) : todayISO();
   await upsertHabitEntry({
     habitId,
     entryDate,
@@ -183,9 +187,10 @@ export const markHabitCompletion = async (
 
 export const clearHabitCompletion = async (habitId: string, userId: string, date: string) => {
   await ensureHabitBelongsToUser(habitId, userId);
-  const normalized = validateISODate(date);
+  const normalized = ensureISODate(date);
   const removed = await removeHabitEntry(habitId, normalized);
-  if (!removed) {
-    throw new AppError('Habit check-in not found', 404);
+  if (removed) {
+    return;
   }
+  await removeHabitEntryByCreatedDate(habitId, normalized);
 };

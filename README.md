@@ -91,11 +91,13 @@ Defined in `.github/workflows/ci-cd.yml`.
 3. `npm run lint`
 4. `npm test`
 5. `npm run build`
-6. Uploads built `dist/` as artifact for quick inspection
+6. `npm run web:build`
+7. Uploads built `dist/` as artifact for quick inspection
 
 ### Main Branch
-- Mirrors the pull-request workflow (checkout → install → lint → test → build) to guarantee main stays green.
-- No automated image publishing/deployment is wired in by default; extend the workflow when you are ready for push-based CD.
+- Mirrors the pull-request workflow steps above.
+- Builds and pushes a production Docker image to GitHub Container Registry (`ghcr.io/<owner>/<repo>`) tagged with the branch and commit SHA.
+- Actions cache accelerates subsequent builds through `docker/build-push-action`.
 
 ## Docker & Compose
 
@@ -106,12 +108,13 @@ docker run --rm -p 3000:3000 --env-file .env tasks-api:dev
 ```
 
 ### Compose variables
-- `IMAGE_REF` controls which image tag `api` service uses (defaults to local build).
-- `JWT_SECRET`, `LOG_LEVEL`, `PORT` can be overridden through environment/export or `.env`.
+- `IMAGE_REF` controls which image tag the `api` service uses (defaults to the locally built image).
+- `JWT_SECRET`, `PORT`, and `LOG_LEVEL` can be overridden at runtime (helpful for prod vs. dev).
+- Postgres credentials default to `habit_user` / `habit_pass` with database `habit_db`; change via environment overrides.
 
-For production deployment, export `IMAGE_REF` to the registry tag pushed by CI, e.g.:
+For production deployment, point `IMAGE_REF` at the pushed registry tag and restart:
 ```bash
-export IMAGE_REF=ghcr.io/your-org/tasks-api:latest
+export IMAGE_REF=ghcr.io/your-org/tasks-api:main
 docker compose pull api
 docker compose up -d --remove-orphans
 ```

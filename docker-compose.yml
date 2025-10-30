@@ -1,42 +1,40 @@
-version: '3.9'
-
 services:
   api:
-    image: ${IMAGE_REF:-mini-project-api:latest}
     build:
       context: .
-    ports:
-      - '${PORT:-3000}:3000'
+      dockerfile: Dockerfile
+    image: ${IMAGE_REF:-habit-tracker-api:local}
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgres://postgres:postgres@db:5432/tasksdb
-      JWT_SECRET: ${JWT_SECRET:-local-secret}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwt}
+      LOG_LEVEL: info
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./db/migrations:/app/db/migrations:ro
-    command: ["node", "dist/index.js"]
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
 
   db:
     image: postgres:15-alpine
-    ports:
-      - '5432:5432'
     environment:
+      POSTGRES_DB: tasksdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: tasksdb
+    ports:
+      - "5432:5432"
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 5s
+    restart: unless-stopped
 
 volumes:
-  db-data:
+  postgres-data:

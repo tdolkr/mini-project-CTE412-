@@ -12,7 +12,6 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ) => {
-  void _next;
   if (err instanceof AppError) {
     if (err.statusCode >= 500) {
       logger.error({ err }, 'Application error');

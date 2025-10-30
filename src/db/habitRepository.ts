@@ -12,7 +12,7 @@ type HabitRow = {
 type HabitEntryRow = {
   id: string;
   habit_id: string;
-  entry_date: Date;
+  entry_date: string;
   completed: boolean;
   created_at: Date;
 };
@@ -25,7 +25,7 @@ interface CreateHabitInput {
 
 interface UpsertHabitEntryInput {
   habitId: string;
-  entryDate: Date;
+  entryDate: string;
   completed?: boolean;
 }
 
@@ -105,7 +105,7 @@ export const upsertHabitEntry = async (input: UpsertHabitEntryInput): Promise<Ha
   const result = await pool.query(
     `
       INSERT INTO habit_entries (habit_id, entry_date, completed)
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2::date, $3)
       ON CONFLICT (habit_id, entry_date)
       DO UPDATE SET completed = EXCLUDED.completed, created_at = NOW()
       RETURNING id, habit_id, entry_date, completed, created_at
@@ -127,20 +127,35 @@ export const removeHabitEntry = async (habitId: string, entryDateISO: string): P
   return (result.rowCount ?? 0) > 0;
 };
 
+export const removeHabitEntryByCreatedDate = async (
+  habitId: string,
+  createdDateISO: string
+): Promise<boolean> => {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      DELETE FROM habit_entries
+      WHERE habit_id = $1 AND created_at::date = $2::date
+    `,
+    [habitId, createdDateISO]
+  );
+  return (result.rowCount ?? 0) > 0;
+};
+
 export const listHabitEntriesForRange = async (
   habitId: string,
-  startDate: Date,
-  endDate: Date
+  startDateISO: string,
+  endDateISO: string
 ): Promise<HabitEntry[]> => {
   const pool = getPool();
   const result = await pool.query(
     `
       SELECT id, habit_id, entry_date, completed, created_at
       FROM habit_entries
-      WHERE habit_id = $1 AND entry_date BETWEEN $2 AND $3
+      WHERE habit_id = $1 AND entry_date BETWEEN $2::date AND $3::date
       ORDER BY entry_date DESC
     `,
-    [habitId, startDate, endDate]
+    [habitId, startDateISO, endDateISO]
   );
   return result.rows.map(mapHabitEntryRow);
 };

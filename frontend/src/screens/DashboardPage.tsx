@@ -58,6 +58,8 @@ const DashboardInner: FC = () => {
   const [habitForm, setHabitForm] = useState({ name: '', description: '' });
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [editingHabitValues, setEditingHabitValues] = useState({ name: '', description: '' });
+  const [pendingCheckIns, setPendingCheckIns] = useState<Record<string, Record<string, boolean>>>({});
+  const [savingCheckIns, setSavingCheckIns] = useState(false);
   const [selectedWeekStart, setSelectedWeekStart] = useState(() => getCurrentWeekStart());
 
   const user = storage.getUser();
@@ -86,6 +88,7 @@ const DashboardInner: FC = () => {
           end: formatLocalDate(endDate)
         });
         setHabits(habitList);
+        setPendingCheckIns({});
       } catch (error: any) {
         showToast(error?.message ?? 'Failed to load data', 'error');
       } finally {
@@ -99,14 +102,23 @@ const DashboardInner: FC = () => {
     void refreshData(selectedWeekStart);
   }, [selectedWeekStart, refreshData]);
 
+  const isHabitDayCompleted = useCallback(
+    (habit: HabitDTO, date: string) => {
+      const pending = pendingCheckIns[habit.id];
+      if (pending && Object.prototype.hasOwnProperty.call(pending, date)) {
+        return pending[date];
+      }
+      return habit.entries.some((entry) => entry.date === date && entry.completed);
+    },
+    [pendingCheckIns]
+  );
+
   const weeklyStats = useMemo(() => {
     const totalSlots = habits.length * weekDays.length;
     let completedSlots = 0;
 
     const dailyBreakdown = weekDays.map((day) => {
-      const completedForDay = habits.filter((habit) =>
-        habit.entries.some((entry) => entry.date === day.iso && entry.completed)
-      ).length;
+      const completedForDay = habits.filter((habit) => isHabitDayCompleted(habit, day.iso)).length;
       completedSlots += completedForDay;
       return {
         day: day.iso,
@@ -122,7 +134,21 @@ const DashboardInner: FC = () => {
       percent: totalSlots === 0 ? 0 : Math.round((completedSlots / totalSlots) * 100),
       dailyBreakdown
     };
-  }, [habits, weekDays]);
+  }, [habits, weekDays, isHabitDayCompleted]);
+
+  const pendingChangesCount = useMemo(() => {
+    return Object.values(pendingCheckIns).reduce(
+      (count, habitChanges) => count + Object.keys(habitChanges).length,
+      0
+    );
+  }, [pendingCheckIns]);
+
+  const confirmDiscardPending = useCallback(() => {
+    if (pendingChangesCount === 0) {
+      return true;
+    }
+    return window.confirm('You have unsaved check-ins for this week. Discard them?');
+  }, [pendingChangesCount]);
 
   const startEditingHabit = (habit: HabitDTO) => {
     setEditingHabitId(habit.id);
@@ -196,44 +222,86 @@ const DashboardInner: FC = () => {
     }
   };
 
-  const handleToggleHabitDay = async (habit: HabitDTO, date: string) => {
-    const isCompleted = habit.entries.some((entry) => entry.date === date && entry.completed);
+  const getBaseHabitDayValue = (habit: HabitDTO, date: string) => {
+    return habit.entries.some((entry) => entry.date === date && entry.completed);
+  };
 
-    setHabits((prev) =>
-      prev.map((item) => {
-        if (item.id !== habit.id) {
-          return item;
-        }
-        const withoutDate = item.entries.filter((entry) => entry.date !== date);
-        const entries = isCompleted ? withoutDate : [...withoutDate, { date, completed: true }];
-        return { ...item, entries };
-      })
-    );
-
-    try {
-      if (isCompleted) {
-        await api.clearHabit(habit.id, date);
-        showToast('Check-in removed', 'info');
+  const handleToggleHabitDay = (habit: HabitDTO, date: string) => {
+    setPendingCheckIns((prev) => {
+      const baseCompleted = getBaseHabitDayValue(habit, date);
+      const habitPending = prev[habit.id] ?? {};
+      const current = Object.prototype.hasOwnProperty.call(habitPending, date)
+        ? habitPending[date]
+        : baseCompleted;
+      const desired = !current;
+      const updated = { ...habitPending };
+      if (desired === baseCompleted) {
+        delete updated[date];
       } else {
-        await api.markHabit(habit.id, { date, completed: true });
-        showToast('Check-in saved', 'success');
+        updated[date] = desired;
       }
-    } catch (error: any) {
-      showToast(error?.message ?? 'Unable to update habit', 'error');
-      await refreshData(selectedWeekStart);
-    }
+      if (Object.keys(updated).length === 0) {
+        const { [habit.id]: _omit, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [habit.id]: updated };
+    });
   };
 
   const goToPreviousWeek = () => {
+    if (!confirmDiscardPending()) {
+      return;
+    }
     setSelectedWeekStart((prev) => formatLocalDate(addDays(parseLocalDate(prev), -7)));
   };
 
   const goToNextWeek = () => {
+    if (!confirmDiscardPending()) {
+      return;
+    }
     setSelectedWeekStart((prev) => formatLocalDate(addDays(parseLocalDate(prev), 7)));
   };
 
   const goToCurrentWeek = () => {
+    if (!confirmDiscardPending()) {
+      return;
+    }
     setSelectedWeekStart(getCurrentWeekStart());
+  };
+
+  const handleSync = () => {
+    if (!confirmDiscardPending()) {
+      return;
+    }
+    void refreshData(selectedWeekStart);
+  };
+
+  const handleSaveCheckIns = async () => {
+    if (pendingChangesCount === 0) {
+      showToast('No check-in changes to save', 'info');
+      return;
+    }
+    try {
+      setSavingCheckIns(true);
+      const operations: Array<Promise<void>> = [];
+      for (const [habitId, changes] of Object.entries(pendingCheckIns)) {
+        for (const [date, completed] of Object.entries(changes)) {
+          if (completed) {
+            operations.push(api.markHabit(habitId, { date, completed: true }));
+          } else {
+            operations.push(api.clearHabit(habitId, date));
+          }
+        }
+      }
+      await Promise.all(operations);
+      showToast('Check-ins saved', 'success');
+      setPendingCheckIns({});
+      await refreshData(selectedWeekStart);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to save check-ins', 'error');
+    } finally {
+      setSavingCheckIns(false);
+    }
   };
 
   const isCurrentWeek = selectedWeekStart === getCurrentWeekStart();
@@ -277,13 +345,23 @@ const DashboardInner: FC = () => {
                 Next week →
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => refreshData(selectedWeekStart)}
-              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-            >
-              Sync data
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveCheckIns}
+                disabled={savingCheckIns || pendingChangesCount === 0}
+                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 enabled:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingCheckIns ? 'Saving…' : `Save check-ins${pendingChangesCount ? ` (${pendingChangesCount})` : ''}`}
+              </button>
+              <button
+                type="button"
+                onClick={handleSync}
+                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Sync data
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -328,11 +406,7 @@ const DashboardInner: FC = () => {
               <div className="rounded-lg border border-slate-200 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Today&apos;s streak</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {
-                    habits.filter((habit) =>
-                      habit.entries.some((entry) => entry.date === today && entry.completed)
-                    ).length
-                  }
+                  {habits.filter((habit) => isHabitDayCompleted(habit, today)).length}
                 </p>
                 <p className="mt-2 text-xs text-slate-500">Habits completed today</p>
               </div>
@@ -412,9 +486,7 @@ const DashboardInner: FC = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {habits.map((habit) => {
-                      const weeklyCount = weekDays.filter((day) =>
-                        habit.entries.some((entry) => entry.date === day.iso && entry.completed)
-                      ).length;
+                      const weeklyCount = weekDays.filter((day) => isHabitDayCompleted(habit, day.iso)).length;
                       const weeklyPercent =
                         weekDays.length === 0 ? 0 : Math.round((weeklyCount / weekDays.length) * 100);
 
@@ -488,22 +560,24 @@ const DashboardInner: FC = () => {
                           </td>
                           {weekDays.map((day) => {
                             const isToday = day.iso === today;
-                            const isCompleted = habit.entries.some(
-                              (entry) => entry.date === day.iso && entry.completed
-                            );
+                            const isCompleted = isHabitDayCompleted(habit, day.iso);
+                            const pendingOverride =
+                              pendingCheckIns[habit.id] &&
+                              Object.prototype.hasOwnProperty.call(pendingCheckIns[habit.id], day.iso);
                             const buttonBase =
                               'flex h-10 w-10 items-center justify-center rounded-md border text-sm font-semibold transition-colors';
                             const buttonVisual = isCompleted
                               ? 'border-sky-500 bg-sky-500 text-white shadow-sm hover:bg-sky-600'
                               : 'border-slate-300 text-slate-500 hover:border-sky-400 hover:text-sky-600';
                             const todayRing = isToday ? 'ring-2 ring-offset-2 ring-sky-200' : '';
+                            const pendingRing = pendingOverride && !savingCheckIns ? ' ring-2 ring-offset-2 ring-amber-300' : '';
 
                             return (
                               <td key={day.iso} className={`px-3 py-4 text-center ${isToday ? 'bg-sky-50' : ''}`}>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleHabitDay(habit, day.iso)}
-                                  className={[buttonBase, buttonVisual, todayRing].join(' ')}
+                                  className={[buttonBase, buttonVisual, todayRing, pendingRing].join(' ').trim()}
                                   aria-pressed={isCompleted}
                                   aria-label={`Mark ${habit.name} on ${day.weekday}`}
                                   title={`${habit.name} • ${day.label}`}

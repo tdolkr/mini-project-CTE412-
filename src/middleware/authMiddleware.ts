@@ -20,17 +20,20 @@ export const authMiddleware = (
   }
 
   const [scheme, token] = header.split(' ');
-
   if (scheme?.toLowerCase() !== 'bearer' || !token) {
     return res.status(401).json({ message: 'Invalid Authorization header' });
   }
 
   try {
     const payload = verifyAccessToken(token);
+    const userId = (payload.sub as string) ?? (payload as any).userId ?? '';
+    if (!userId) {
+      return res.status(401).json({ message: 'Invalid token payload' });
+    }
     req.user = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name
+      id: userId,
+      email: (payload as any).email ?? '',
+      name: (payload as any).name ?? ''
     };
     return next();
   } catch (error) {

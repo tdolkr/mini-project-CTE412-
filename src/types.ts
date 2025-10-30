@@ -24,7 +24,7 @@ export interface Habit {
 export interface HabitEntry {
   id: string;
   habitId: string;
-  entryDate: Date;
+  entryDate: string | Date;
   completed: boolean;
   createdAt: Date;
 }
