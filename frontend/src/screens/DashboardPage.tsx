@@ -269,13 +269,6 @@ const DashboardInner: FC = () => {
     setSelectedWeekStart(getCurrentWeekStart());
   };
 
-  const handleSync = () => {
-    if (!confirmDiscardPending()) {
-      return;
-    }
-    void refreshData(selectedWeekStart);
-  };
-
   const handleSaveCheckIns = async () => {
     if (pendingChangesCount === 0) {
       showToast('No check-in changes to save', 'info');
@@ -353,13 +346,6 @@ const DashboardInner: FC = () => {
                 className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 enabled:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingCheckIns ? 'Saving…' : `Save check-ins${pendingChangesCount ? ` (${pendingChangesCount})` : ''}`}
-              </button>
-              <button
-                type="button"
-                onClick={handleSync}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-              >
-                Sync data
               </button>
             </div>
             <button
