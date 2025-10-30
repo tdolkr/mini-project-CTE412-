@@ -7,7 +7,15 @@ interface CreateUserInput {
   name: string;
 }
 
-const mapUserRow = (row: any): User => ({
+type UserRow = {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string;
+  created_at: Date;
+};
+
+const mapUserRow = (row: UserRow): User => ({
   id: row.id,
   email: row.email,
   name: row.name,

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken } from '../utils/token';
+import { verifyAccessToken, AccessTokenPayload } from '../utils/token';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -26,14 +26,15 @@ export const authMiddleware = (
 
   try {
     const payload = verifyAccessToken(token);
-    const userId = (payload.sub as string) ?? (payload as any).userId ?? '';
+    const jwtPayload = payload as AccessTokenPayload & { sub?: string };
+    const userId = jwtPayload.sub ?? jwtPayload.userId;
     if (!userId) {
       return res.status(401).json({ message: 'Invalid token payload' });
     }
     req.user = {
       id: userId,
-      email: (payload as any).email ?? '',
-      name: (payload as any).name ?? ''
+      email: jwtPayload.email,
+      name: jwtPayload.name
     };
     return next();
   } catch (error) {
